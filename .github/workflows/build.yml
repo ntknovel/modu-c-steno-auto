@@ -1,0 +1,286 @@
+name: Build MODU-C STENO Auto
+'on':
+  workflow_dispatch:
+    inputs:
+      request_id:
+        description: Unique request ID from the Windows STENO launcher
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: modu-steno-auto-${{ inputs.request_id }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    name: Static and native tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+    - name: Verify and unpack reviewed source ZIP
+      shell: bash
+      run: |
+        python3 - <<'PY_SOURCE'
+        import hashlib, os, pathlib, stat, zipfile
+        root = pathlib.Path(os.environ['GITHUB_WORKSPACE']).resolve()
+        archive = root / 'modu-source.zip'
+        expected = '5ab577056be4bc8bb34d4621fb95111aad5587acece48a014121f56e869aa2cf'
+        prefix = 'MODU-C_STENO_v0.3.0_Compact71/'
+        if archive.stat().st_size > 20 * 1024 * 1024:
+            raise SystemExit('Source ZIP is unexpectedly large')
+        if hashlib.sha256(archive.read_bytes()).hexdigest() != expected:
+            raise SystemExit('Source ZIP checksum mismatch. Upload STENO v0.3.0 modu-source.zip without editing it.')
+        with zipfile.ZipFile(archive) as z:
+            entries = z.infolist()
+            if len(entries) > 1500 or sum(i.file_size for i in entries) > 32 * 1024 * 1024:
+                raise SystemExit('Source ZIP exceeds safe extraction limits')
+            checked, seen = [], set()
+            for info in entries:
+                if not info.filename.startswith(prefix) or '\\' in info.filename:
+                    raise SystemExit('Unexpected source ZIP path')
+                name = info.filename[len(prefix):]
+                if not name and info.is_dir():
+                    continue
+                path = pathlib.PurePosixPath(name)
+                if not name or path.is_absolute() or any(x in ('..', '.git', '.west') for x in path.parts):
+                    raise SystemExit('Unsafe source ZIP path')
+                mode = info.external_attr >> 16
+                if stat.S_ISLNK(mode):
+                    raise SystemExit('Symbolic links are not allowed in source ZIP')
+                target = (root / path).resolve()
+                if target == root or root not in target.parents or target in seen:
+                    raise SystemExit('Unsafe or duplicated source ZIP destination')
+                seen.add(target)
+                checked.append((info, target))
+            # Validate every destination before creating/writing any file.
+            for info, target in checked:
+                if info.is_dir():
+                    target.mkdir(parents=True, exist_ok=True)
+                else:
+                    data = z.read(info)
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(data)
+        print('Verified and unpacked MODU-C STENO v0.3.0 sources. No device firmware has been built yet.')
+        PY_SOURCE
+    - run: python3 scripts/validate.py
+    - run: python3 scripts/selftest.py
+    - run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+    - name: Cornix v2.2.6 regression tests
+      run: bash modules/modu-steno/validation/run_host_tests.sh
+    - name: MODU auxiliary key integration
+      run: SANITIZER_FLAGS="-fsanitize=undefined,address -fno-omit-frame-pointer" bash modules/modu-steno/validation/run_modu_aux_tests.sh
+    - name: Native core tests (not a Zephyr build)
+      run: |
+        cc -std=c11 -Wall -Wextra -Werror -pedantic -fsanitize=undefined,address -fno-omit-frame-pointer \
+           -I modules/modu-control/include modules/modu-control/src/core.c tests/test_core.c -o /tmp/modu-core-test
+        /tmp/modu-core-test
+  build:
+    needs: validate
+    name: Compile ${{ matrix.side }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    container: zmkfirmware/zmk-build-arm:stable
+    strategy:
+      fail-fast: false
+      matrix:
+        side:
+        - left
+        - right
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+    - name: Verify and unpack reviewed source ZIP
+      shell: bash
+      run: |
+        python3 - <<'PY_SOURCE'
+        import hashlib, os, pathlib, stat, zipfile
+        root = pathlib.Path(os.environ['GITHUB_WORKSPACE']).resolve()
+        archive = root / 'modu-source.zip'
+        expected = '5ab577056be4bc8bb34d4621fb95111aad5587acece48a014121f56e869aa2cf'
+        prefix = 'MODU-C_STENO_v0.3.0_Compact71/'
+        if archive.stat().st_size > 20 * 1024 * 1024:
+            raise SystemExit('Source ZIP is unexpectedly large')
+        if hashlib.sha256(archive.read_bytes()).hexdigest() != expected:
+            raise SystemExit('Source ZIP checksum mismatch. Upload STENO v0.3.0 modu-source.zip without editing it.')
+        with zipfile.ZipFile(archive) as z:
+            entries = z.infolist()
+            if len(entries) > 1500 or sum(i.file_size for i in entries) > 32 * 1024 * 1024:
+                raise SystemExit('Source ZIP exceeds safe extraction limits')
+            checked, seen = [], set()
+            for info in entries:
+                if not info.filename.startswith(prefix) or '\\' in info.filename:
+                    raise SystemExit('Unexpected source ZIP path')
+                name = info.filename[len(prefix):]
+                if not name and info.is_dir():
+                    continue
+                path = pathlib.PurePosixPath(name)
+                if not name or path.is_absolute() or any(x in ('..', '.git', '.west') for x in path.parts):
+                    raise SystemExit('Unsafe source ZIP path')
+                mode = info.external_attr >> 16
+                if stat.S_ISLNK(mode):
+                    raise SystemExit('Symbolic links are not allowed in source ZIP')
+                target = (root / path).resolve()
+                if target == root or root not in target.parents or target in seen:
+                    raise SystemExit('Unsafe or duplicated source ZIP destination')
+                seen.add(target)
+                checked.append((info, target))
+            # Validate every destination before creating/writing any file.
+            for info, target in checked:
+                if info.is_dir():
+                    target.mkdir(parents=True, exist_ok=True)
+                else:
+                    data = z.read(info)
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(data)
+        print('Verified and unpacked MODU-C STENO v0.3.0 sources. No device firmware has been built yet.')
+        PY_SOURCE
+    - name: Fetch pinned ZMK and MODU hardware
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p diagnostics/${{ matrix.side }}
+        {
+          west init -l config
+          west update --fetch-opt=--filter=tree:0
+          west zephyr-export
+        } 2>&1 | tee diagnostics/${{ matrix.side }}/dependencies.log
+    - name: Resolve existing hardware, compile and check
+      shell: bash
+      env:
+        PYTHONPATH: ${{ github.workspace }}/zephyr/scripts/dts/python-devicetree/src
+      run: |
+        set -euo pipefail
+        python3 scripts/build_firmware.py \
+          --config "${GITHUB_WORKSPACE}" \
+          --workspace "${GITHUB_WORKSPACE}" \
+          --side ${{ matrix.side }} 2>&1 | tee diagnostics/${{ matrix.side }}/integration.log
+    - name: Keep build diagnostics even on failure
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: modu-diagnostics-${{ matrix.side }}
+        path: diagnostics/${{ matrix.side }}/
+        if-no-files-found: warn
+        retention-days: 7
+        include-hidden-files: true
+    - name: Upload checked intermediate binary
+      uses: actions/upload-artifact@v7
+      with:
+        name: modu-intermediate-${{ matrix.side }}
+        path: intermediate/
+        if-no-files-found: error
+        retention-days: 3
+  package:
+    needs: build
+    name: Package both UF2 files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+    - name: Verify and unpack reviewed source ZIP
+      shell: bash
+      run: |
+        python3 - <<'PY_SOURCE'
+        import hashlib, os, pathlib, stat, zipfile
+        root = pathlib.Path(os.environ['GITHUB_WORKSPACE']).resolve()
+        archive = root / 'modu-source.zip'
+        expected = '5ab577056be4bc8bb34d4621fb95111aad5587acece48a014121f56e869aa2cf'
+        prefix = 'MODU-C_STENO_v0.3.0_Compact71/'
+        if archive.stat().st_size > 20 * 1024 * 1024:
+            raise SystemExit('Source ZIP is unexpectedly large')
+        if hashlib.sha256(archive.read_bytes()).hexdigest() != expected:
+            raise SystemExit('Source ZIP checksum mismatch. Upload STENO v0.3.0 modu-source.zip without editing it.')
+        with zipfile.ZipFile(archive) as z:
+            entries = z.infolist()
+            if len(entries) > 1500 or sum(i.file_size for i in entries) > 32 * 1024 * 1024:
+                raise SystemExit('Source ZIP exceeds safe extraction limits')
+            checked, seen = [], set()
+            for info in entries:
+                if not info.filename.startswith(prefix) or '\\' in info.filename:
+                    raise SystemExit('Unexpected source ZIP path')
+                name = info.filename[len(prefix):]
+                if not name and info.is_dir():
+                    continue
+                path = pathlib.PurePosixPath(name)
+                if not name or path.is_absolute() or any(x in ('..', '.git', '.west') for x in path.parts):
+                    raise SystemExit('Unsafe source ZIP path')
+                mode = info.external_attr >> 16
+                if stat.S_ISLNK(mode):
+                    raise SystemExit('Symbolic links are not allowed in source ZIP')
+                target = (root / path).resolve()
+                if target == root or root not in target.parents or target in seen:
+                    raise SystemExit('Unsafe or duplicated source ZIP destination')
+                seen.add(target)
+                checked.append((info, target))
+            # Validate every destination before creating/writing any file.
+            for info, target in checked:
+                if info.is_dir():
+                    target.mkdir(parents=True, exist_ok=True)
+                else:
+                    data = z.read(info)
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(data)
+        print('Verified and unpacked MODU-C STENO v0.3.0 sources. No device firmware has been built yet.')
+        PY_SOURCE
+    - uses: actions/download-artifact@v7
+      with:
+        pattern: modu-intermediate-*
+        path: intermediate
+        merge-multiple: true
+    - uses: actions/checkout@v7
+      with:
+        repository: 22sh22/modu-c-firmware
+        ref: bee0bb4b812f63f279eb67e928accc89600b5904
+        path: upstream
+        persist-credentials: false
+        sparse-checkout: |
+          tools/uf2
+    - name: Convert and verify UF2
+      run: |
+        python3 scripts/package_firmware.py --intermediate intermediate --converter upstream/tools/uf2/uf2conv.py --output uf2 --family 0xADA52840
+        python3 scripts/verify_uf2.py uf2/modu_left.uf2 uf2/modu_right.uf2
+    - name: Include notices and instructions
+      run: |
+        cp LICENSE NOTICE.md THIRD_PARTY_NOTICES.md uf2/
+        cp -R LICENSES uf2/LICENSES
+        cp docs/NO_CODESPACES_KO.md uf2/READ_ME_KO.md
+        cp docs/STENO_MAPPING_KO.md uf2/STENO_MAPPING_KO.md
+        cd uf2
+        sha256sum modu_left.uf2 modu_right.uf2 > SHA256SUMS.txt
+    - name: Record exact STENO build identity
+      shell: bash
+      env:
+        MODU_REQUEST_ID: ${{ inputs.request_id }}
+      run: |
+        python3 - <<'PY_RECEIPT'
+        import hashlib, json, os, pathlib, re
+        request_id = os.environ['MODU_REQUEST_ID']
+        if not re.fullmatch(r'[0-9a-f]{32}', request_id):
+            raise SystemExit('Invalid launcher request ID')
+        source_hash = hashlib.sha256(pathlib.Path('modu-source.zip').read_bytes()).hexdigest()
+        if source_hash != '5ab577056be4bc8bb34d4621fb95111aad5587acece48a014121f56e869aa2cf':
+            raise SystemExit('Wrong STENO source archive')
+        record = {
+            'schema': 1, 'tool': 'modu-c-steno-auto-builder',
+            'profile': 'modu-c-steno-compact71', 'firmware_version': '0.3.0',
+            'source_sha256': source_hash, 'request_id': request_id,
+            'run_id': os.environ['GITHUB_RUN_ID'],
+            'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+            'commit': os.environ['GITHUB_SHA'],
+            'repository': os.environ['GITHUB_REPOSITORY'],
+        }
+        pathlib.Path('uf2/build-info.json').write_text(json.dumps(record, indent=2) + '\n', encoding='utf-8')
+        PY_RECEIPT
+    - uses: actions/upload-artifact@v7
+      with:
+        name: modu-c-studio-firmware
+        path: uf2/
+        if-no-files-found: error
+        retention-days: 14
+run-name: MODU STENO auto ${{ inputs.request_id }}
