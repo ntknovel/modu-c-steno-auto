@@ -27,12 +27,12 @@ jobs:
         import hashlib, os, pathlib, stat, zipfile
         root = pathlib.Path(os.environ['GITHUB_WORKSPACE']).resolve()
         archive = root / 'modu-source.zip'
-        expected = '5ab577056be4bc8bb34d4621fb95111aad5587acece48a014121f56e869aa2cf'
-        prefix = 'MODU-C_STENO_v0.3.0_Compact71/'
+        expected = 'c3563b36332b646bee3650d87be59e13087dde83f713bd4dbfe74124caff1adf'
+        prefix = 'MODU-C_STENO_v0.3.1_Compact71/'
         if archive.stat().st_size > 20 * 1024 * 1024:
             raise SystemExit('Source ZIP is unexpectedly large')
         if hashlib.sha256(archive.read_bytes()).hexdigest() != expected:
-            raise SystemExit('Source ZIP checksum mismatch. Upload STENO v0.3.0 modu-source.zip without editing it.')
+            raise SystemExit('Source ZIP checksum mismatch. Upload STENO v0.3.1 modu-source.zip without editing it.')
         with zipfile.ZipFile(archive) as z:
             entries = z.infolist()
             if len(entries) > 1500 or sum(i.file_size for i in entries) > 32 * 1024 * 1024:
@@ -63,7 +63,7 @@ jobs:
                     data = z.read(info)
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(data)
-        print('Verified and unpacked MODU-C STENO v0.3.0 sources. No device firmware has been built yet.')
+        print('Verified and unpacked MODU-C STENO v0.3.1 sources. No device firmware has been built yet.')
         PY_SOURCE
     - run: python3 scripts/validate.py
     - run: python3 scripts/selftest.py
@@ -100,12 +100,12 @@ jobs:
         import hashlib, os, pathlib, stat, zipfile
         root = pathlib.Path(os.environ['GITHUB_WORKSPACE']).resolve()
         archive = root / 'modu-source.zip'
-        expected = '5ab577056be4bc8bb34d4621fb95111aad5587acece48a014121f56e869aa2cf'
-        prefix = 'MODU-C_STENO_v0.3.0_Compact71/'
+        expected = 'c3563b36332b646bee3650d87be59e13087dde83f713bd4dbfe74124caff1adf'
+        prefix = 'MODU-C_STENO_v0.3.1_Compact71/'
         if archive.stat().st_size > 20 * 1024 * 1024:
             raise SystemExit('Source ZIP is unexpectedly large')
         if hashlib.sha256(archive.read_bytes()).hexdigest() != expected:
-            raise SystemExit('Source ZIP checksum mismatch. Upload STENO v0.3.0 modu-source.zip without editing it.')
+            raise SystemExit('Source ZIP checksum mismatch. Upload STENO v0.3.1 modu-source.zip without editing it.')
         with zipfile.ZipFile(archive) as z:
             entries = z.infolist()
             if len(entries) > 1500 or sum(i.file_size for i in entries) > 32 * 1024 * 1024:
@@ -136,7 +136,7 @@ jobs:
                     data = z.read(info)
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(data)
-        print('Verified and unpacked MODU-C STENO v0.3.0 sources. No device firmware has been built yet.')
+        print('Verified and unpacked MODU-C STENO v0.3.1 sources. No device firmware has been built yet.')
         PY_SOURCE
     - name: Fetch pinned ZMK and MODU hardware
       shell: bash
@@ -190,12 +190,12 @@ jobs:
         import hashlib, os, pathlib, stat, zipfile
         root = pathlib.Path(os.environ['GITHUB_WORKSPACE']).resolve()
         archive = root / 'modu-source.zip'
-        expected = '5ab577056be4bc8bb34d4621fb95111aad5587acece48a014121f56e869aa2cf'
-        prefix = 'MODU-C_STENO_v0.3.0_Compact71/'
+        expected = 'c3563b36332b646bee3650d87be59e13087dde83f713bd4dbfe74124caff1adf'
+        prefix = 'MODU-C_STENO_v0.3.1_Compact71/'
         if archive.stat().st_size > 20 * 1024 * 1024:
             raise SystemExit('Source ZIP is unexpectedly large')
         if hashlib.sha256(archive.read_bytes()).hexdigest() != expected:
-            raise SystemExit('Source ZIP checksum mismatch. Upload STENO v0.3.0 modu-source.zip without editing it.')
+            raise SystemExit('Source ZIP checksum mismatch. Upload STENO v0.3.1 modu-source.zip without editing it.')
         with zipfile.ZipFile(archive) as z:
             entries = z.infolist()
             if len(entries) > 1500 or sum(i.file_size for i in entries) > 32 * 1024 * 1024:
@@ -226,7 +226,7 @@ jobs:
                     data = z.read(info)
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(data)
-        print('Verified and unpacked MODU-C STENO v0.3.0 sources. No device firmware has been built yet.')
+        print('Verified and unpacked MODU-C STENO v0.3.1 sources. No device firmware has been built yet.')
         PY_SOURCE
     - uses: actions/download-artifact@v7
       with:
@@ -264,11 +264,11 @@ jobs:
         if not re.fullmatch(r'[0-9a-f]{32}', request_id):
             raise SystemExit('Invalid launcher request ID')
         source_hash = hashlib.sha256(pathlib.Path('modu-source.zip').read_bytes()).hexdigest()
-        if source_hash != '5ab577056be4bc8bb34d4621fb95111aad5587acece48a014121f56e869aa2cf':
+        if source_hash != 'c3563b36332b646bee3650d87be59e13087dde83f713bd4dbfe74124caff1adf':
             raise SystemExit('Wrong STENO source archive')
         record = {
             'schema': 1, 'tool': 'modu-c-steno-auto-builder',
-            'profile': 'modu-c-steno-compact71', 'firmware_version': '0.3.0',
+            'profile': 'modu-c-steno-compact71', 'firmware_version': '0.3.1',
             'source_sha256': source_hash, 'request_id': request_id,
             'run_id': os.environ['GITHUB_RUN_ID'],
             'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],

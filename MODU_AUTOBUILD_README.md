@@ -1,6 +1,6 @@
 # MODU-C automatic firmware build
-This dedicated repository is managed by MODU-C STENO Auto Builder 1.1.0.
-Bundled firmware source: v0.3.0. This is not a claim of hardware validation.
+This dedicated repository is managed by MODU-C STENO Auto Builder 1.1.1.
+Bundled firmware source: v0.3.1. This is not a claim of hardware validation.
 `modu-source.zip` is verified and unpacked only inside GitHub Actions.
 The workflow is dispatch-only to avoid duplicate builds during upload.
 Final install candidates: artifact `modu-c-studio-firmware` ONLY.
